@@ -647,5 +647,123 @@
     - data marts (now have a 3nf baseline)
       - dimensionally modelled and (unlike Kimball's) mostly
         aggregated.
-        
 
+  * Hybrid Kimball Bus & Inmon CIF
+    - Removes Data Marts
+    - Exposes the enterpries DW bus architecture
+
+  * OLAP Cubes
+
+    - From a star schema, create OLAP cubes
+    - These are tables aggregating a number of facts/dimensions. For example
+      Tables for Movie, Revenue, Branch/Location, Month (1 table for each month)
+    - These are very easy for business users
+
+    - *Rolling Up and Drilling Down*:
+      - aggregating and disaggregating on specific dimensions. I.e sum
+        of sales for each country (summing over city). or decomposing
+        cities into smaller districts.
+
+    - OLAP cubes should store data at the finest granularity.
+
+    - *Slicing and Dicing*:
+      - slices are essentially marginal distributions.
+      - dices are sub-cubes created by restricting the range of
+        certain values.
+
+    - OLAP Cubes Query Optimization
+      - There is a GROUP by CUBING statements:
+        - GROUP BY SETS
+        - GROUP BY CUBE
+      - When you call CUBE, you do one pass through the facts
+        table. This gives you all combinations of, for example,
+        (movie, branch, month).
+      - Saving all the combinations, is usually sufficient for a very
+        wide number of future queries.
+
+    - Links:
+      - https://www.amazon.com/Data-Warehouse-Toolkit-Complete-Dimensional/dp/0471200247
+
+      - https://www.amazon.com/Building-Data-Warehouse-W-Inmon/dp/0764599445
+
+      - https://www.amazon.com/Building-Data-Warehouse-Examples-Experts/dp/1590599314
+
+    - OLAP Cube Technologies:
+      - MOLAP (multidimensional online analytical processing)
+        - cubes are stored on a dedicated server using a
+          non-relational database structure.
+      - ROLAP (Relational online analytical processing)
+        - cubes are created on the fly and stored in relational
+          databases
+
+* AWS
+
+  - Create an IAM role
+    - select entity (AWS service)
+    - select use case (Redshift - Customizable)
+    - Attach permissions policies: check AmazonS3ReadOnlyAccess
+    - add role name (MyRedshiftRole)
+      
+  - Create Security Group
+    - Navigate to EC2 services
+    - open security groups
+    - create new security group
+      - group name: redshift_security_group
+      - description: Authorize Redshift Cluster Access
+      - VPC: default
+      - Inbound rules:
+        - add new:
+          - Type: Custom TCP
+          - Protocol: TCP
+          - Port Range: 5439 (Default)
+          - source: 0.0.0.0/0 (anywhere in the world)
+            (note: for demonstration purposes only. this allows access
+            from any computer on the internet!)
+      - Outbound rules:
+        - default (allow traffic to anywhere)
+          
+  - Launch a Redshift Cluster
+    - Create Cluster:
+      - unique id: redshift-cluster-1
+      - choose free trial.
+      - cluster specs (default):
+        - dc2.large
+        - 2 vCPUs
+        - 160 GB storage
+      - username and pw created and stored.
+    - (Note: in free tier the following can be configured once the
+      cluster is available)
+    - Associate IAM role MyRedshiftRole
+    - Network and Security:
+      - VPC: default
+      - VPC Security Groups: redshift-security-group (and default?)
+    - Subnet Groups
+      - create cluster subnet group and select in network/security
+        configuration (I wasn't able to do this...)
+        
+  - Create IAM User
+    - give username
+    - allow programmatic access
+    - attach existing policies:
+      - RedshiftFullAccess
+      - S3ReadOnly
+    - review and download credentials (.csv)
+      
+  - S3
+    - (unique) name
+    - allow public access
+    - disable versioning and encryption
+      
+  - Amazon RDS
+    - create database
+    - postgresql - latest version is default
+    - free tier template
+    - postgreSQL-test identifier
+    - master username and password stored
+    - default storage
+    - default connectivity with:
+      - public access YES (choose no when more familiar)
+      - redshift_security_group and default
+    - provide a db name in additional configuration (testdb)
+
+* DWH on AWS
