@@ -767,3 +767,177 @@
     - provide a db name in additional configuration (testdb)
 
 * DWH on AWS
+  
+  - Cloud Managed:
+    - Amazon RDS, DynamoDB, S3
+    - re-use of expertise, less staff, etc.
+    - deal with complexity through 'infrastructure as code'
+
+  - Self Managed:
+    - EC2 + {postgresql, cassandra, unix}
+    - essentially have ec2 do everything
+
+  - Redshift:
+    
+    - column-oriented storage
+    - best oriented for OLAP workloads.
+    - internally, it's a modified postgresql
+
+    - most relational databases execute queries in parallel, with each
+      cpu executing a single query. This is good for OLTP, as you may
+      have many users executing small updates and retrievals.
+
+    - Massively parallel processing (MPP) parallelizes the execution
+      of a single query on multiple cpus/machines.
+    - This is done via table partitioning.
+
+    - Redshift is cloud-managed, column-oriented, and MPP.
+
+    - Architecture:
+      - Leader Node:
+        - coordinates compute nodes
+        - handles external communication
+        - optimizes query execution
+      - Compute Nodes
+        - each has it's own cpu, memory, and disk
+        - these can be scaled up or scaled out
+        - each node is divided into a number of slices: a cluster with
+          n slices can process n partitions of a table simultaneously.
+          - a slice has atleast one cpu and dedicated storage and memory
+          - sum of all slices across all compute nodes is the unit of
+            parallelization.
+      - Nodes can be optimized for compute or storage. these come with
+        cost/benefit pros/cons.
+      - The coming demo with be 4 nodes at $.25/hour! *SET UP BILLING ALERTS*
+
+  - SQL-TO-SQL ETL
+    
+    - we will want to copy the results of a query to another table on
+      a totally different database server.
+    - this is feasible when both db servers are running the same
+      RDBMS, but much harder if different.
+    - Either way, there will likely be some transforming, cleaning,
+      and or governance that needs to be done along the way.
+
+    - with an EC2 instance we can direct one db to transfer (COPY) to s3, and
+      then another db to query that s3 bucket. This bypasses the need
+      for local storage on EC2.
+
+    - FLOW IN CONTEXT:
+      - sources:
+        - s3
+        - cassandra
+        - ec2
+        - dynamodb
+        - etc.
+      - ETL:
+        - ec2
+        - aws data pipeline
+        - airflow
+      - STAGING:
+        -s3
+      - DWH:
+        - redshift
+      - OLAP CUBES:
+        - s3
+        - aws rds
+        - cassandra
+      - BI Apps
+        - jupyter
+        - tableau
+
+    - Transferring data from s3 staging to redshift
+      - use the COPY command
+      - may be better to break into multiple files and ingest in
+        parallel:
+        - use a common prefix
+        - a manifest file
+      - better to ingest from the same aws region
+      - better to compress all the csv files
+
+    - COPY (PREFIX) example
+      #+BEGIN_SRC sql
+        COPY sporting_event_ticket FROM 's3://udacity-labs/ticket/split/part'
+        CREDENTIALS 'aws_iam_role=arn:aws:iam::464956546:role/dwhRole'
+        gzip DELIMETER ';' REGION 'us-west-2';
+      #+END_SRC
+      'part' can just be a prefix matching multiple files.
+
+    - COPY (MANIFEST) example:
+      #+BEGIN_SRC sql
+      COPY customer
+      FROM 's3://mybucket/cust.manifest'
+      IAM_ROLE 'arn:aws:iam::01234567890:role/myRedshiftRole'
+      manifest;
+      #+END_SRC sql
+      with cust.manifest:
+      {
+      'entries': [
+      {"url": "s3://mybucket-alpha/2013-10-04-custdata", "mandatory" :
+      true},
+      {"url": "s3://mybucket-alpha/2013-10-05-custdata", "mandatory" :
+      true},
+      {"url": "s3://mybucket-alpha/2013-10-06-custdata", "mandatory" :
+      true}
+      ]
+      }
+
+    - compression
+      - redshift gives control over each column's compression. (see
+        redshift documentation)
+      - COPY makes a best effort to compress each column optimally
+
+    - ETL from other sources
+      - possible to ingest directly from ssh from an EC2 machine's
+        storage
+      - otherwise:
+        - s3 is a *staging area*
+        - so some other EC2 ETL working needs to run the ingestion
+          jobs via some *orchestarted dataflow product* like airflow,
+          luigi, nifi, streamset, or aws data pipeline.
+
+    - ETL *OUT* of redshift
+      - redshift can connect directly to BI Apps via (JDBC/ODBC)
+      - may want to extract pre-aggregated OLAP cubes:
+        #+BEGIN_SRC sql
+        UNLOAD ('select * from venue limit 10')
+        to 's3://mybucket/venue_pipe_'
+        iam_role 'arn:aws:iam:012345:role/MyRedshiftRole';
+        #+END_SRC sql
+        (in this case read credentials are required)
+
+  - Building a Redshift Cluster
+    (see above, there is no longer a quick-launch option. Plus I don't
+    think this example is explicit enough: the free-trial version
+    doesn't allow you to change the number of nodes. If it does, it
+    must be post startup.)
+
+  - Issues:
+    - the previous cluster is operational, but we need additional
+      functionality:
+      - Security:
+        - needs to be accessible *ONLY* from the VPC
+        - need to access it from our jupyter workspace.
+
+      - Access to s3:
+        - the cluster needs (read) access to an s3 bucket.
+
+    - Redshift needs an IAM role.
+    - Chage the TCP ports open in the security group
+
+  - Modern engineering uses *Infrastructure as Code*
+    
+    - "creating a machine is as easy as opening a file"
+
+    - aws-cli
+    - aws sdk (python, java, etc.)
+    - amazon cloud formation (jscon description)
+      - atomic (everything succeeds or nothing does)
+
+    - we will proceed with aws sdk for python: boto3
+    - we'll create an IAM user dwhadmin and give it admin privileges
+      (this is, in general excessive, but helpful for the demo)
+    - user gets an access token and secret.
+      
+      
+      
