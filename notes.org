@@ -857,7 +857,7 @@
 
     - COPY (PREFIX) example
       #+BEGIN_SRC sql
-        COPY sporting_event_ticket FROM 's3://udacity-labs/ticket/split/part'
+        COPY sporting_event_ticket FROM 's3://udacity-labs/tickets/split/part'
         CREDENTIALS 'aws_iam_role=arn:aws:iam::464956546:role/dwhRole'
         gzip DELIMETER ';' REGION 'us-west-2';
       #+END_SRC
@@ -940,4 +940,413 @@
     - user gets an access token and secret.
       
       
+  - Optimizing Table Design
+    - table partitioning is done blindly
+    - with knowledge of common access patterns, partitioning can be
+      done intelligently
+    - strategies:
+      - distribution style
+        - EVEN, ALL, AUTO, KEY
+      - sorting key
+
+    - EVEN distribution:
+      - Round-robin over all slices to achieve even load balancing
+        (M rows evenly distributed among N slices)
+      - good if there won't be joins:
+        data will need to be copied from one slice onto another before
+        everything is combined in the final output. This process is
+        called *Shuffling*. Joins can't be done in parallel.
+    - ALL distribution:
+      - storing dimension tables in this way insures super efficient
+        joins with no shuffling. (when fact is distributed EVEN).
+        Known as *Broadcasting*. There tend to be fewer rows in
+        dimension tables relative to fact tables.
+    - AUTO:
+      - leaves the decision to redshift. 'small enough' tables are
+        broadcast while large tables are EVENly distributed.
+    - KEY:
+      - fact tables are distributed by a foreign dim key. This puts
+        all data with a specific key on one slice. The distribution
+        can end up skewed.
+      - 'distkey'
+      - the dim table is then distributed accordingly to allow for
+        parallel joins. (i.e. one key per slice.)
+    - Sorting Key
+      - defining a column as a sort key allows:
+        - rows to be sorted before distribution
+        - minimizes query time
+        - useful in columns frequently used for sorting, i.e. date.
+
+* Project 2 (notes):
+
+  - IAC steps:
+    
+    - setup configuration file:
+      - key, secret
+      - cluster type
+      - num nodes
+      - node types
+      - cluster id
+      - db name
+      - db user
+      - db pw
+      - db port
+      - IAM role name
+
+    - initiate boto3 resources:
+      - ec2 (for sg)
+      - s3
+
+    - initiate boto3 clients:
+      - iam
+      - redshift
+
+    - (checkout s3 bucket)
+
+    - create IAM role
+
+    - attach policy to role:
+      - AmazonS3ReadOnlyAccess
+
+    - get role ARN
+
+    - create redshift cluster using boto3 client
+      - cluster type
+      - node type
+      - num nodes
+      - db name
+      - cluster id
+      - db user name
+      - db pw
+      - role arn
+
+    - record DWH endpoint and arn
+
+    - open TCP port to access the cluster endpoint. (this is done via
+      ec2 vpc)
       
+    - connect to the postgres db. do things.
+      
+       
+* Lesson 5: Spark and Data Lakes
+
+  - What is big data? Requires the use of multiple machines, usually
+    in the cloud.
+  - Four Numbers Everyone Should Know:
+    - How long does it take for your CPU to add two numbers?
+    - How quickly can you look up an appointment if your calendar is
+      already cached in you laptop's memory?
+    - How many seconds does it take to load your favorite song from
+      your laptop's SSD storage?
+    - How much data can you download from Netflix in a minute?
+
+  - CPU:
+    - "the brain". does computer operations. 1 cpu operation takes .4 ns
+      (for the typical computer)
+    - directs other components and runs mathematical calculations.
+    - can store small amounts of data in /registers/ - these hold data
+      that the cpu is currently working on. registers make
+      computations more efficient, as data doesn't (necessarily) have to be sent
+      back and forth between memory and the CPU.
+  - Memory:
+    - "scratch paper" helps with more complicated computations. One memory reference takes 100 ns (for the
+      typical computer)
+    - efficient
+    - ephemeral
+    - expensive
+  - Storage:
+    - "file cabinet". Random read from SSD: 16us.
+    - approximately 15% slower than memory.
+  - Network:
+    - Access to the outside world. Round trip for data (?) from EU to
+      US: 150 ms.
+    - most common bottleneck when working with big data.
+    - 20x when data must be downloaded from another machine.
+    - Distributed systems try to minimize shuffling data back and
+      forth across different computers for this reason.
+
+  - Shorthand:
+    - CPU is 200x faster than memory
+    - Memory is 15x faster than SSD
+    - SSD is 20x fater than network
+
+
+* History of distributed and parallel computing
+
+  - network topology: a graph with each node having it's own memory
+    and cpu
+  - parallel computing: all processors may have access to shared
+    memory to exchange information.
+  - distributed computing: nodes (cpu + memory) are connected across a
+    network.
+
+* Hadoop Vocabulary
+
+  - Hadoop: an ecosystem of tools for big data storage and data
+    analysis
+  - Haddop MapReduce: system for processing and analyzing large
+    datasets in parallel
+  - Hadoop YARN: a resource manager that schedules jobs across a
+    cluster
+  - Hadoop Distributed File System (HDFS): a big data distributed
+    storage system.
+  - Apache Pig: a SQL-like language that runs on top of hadoop
+    mapreduce
+  - Apache Hive: another SQL-like language that runs on top of hadoop
+
+  - Basic Differences with Spark:
+    - Hadoop writes intermediate results to disk, whereas Spark tries to
+    keep them in memory.
+    - Hadoop uses HDFS to store data, whereas Spark can read in data
+      from other sources.
+
+  - Streaming:
+    - Spark not so popular
+    - More often Storm and Flink, as they can deliver results in ms.
+
+* MapReduce
+
+  - Each Datum is reduced to a key/value pair, key/value pairs are
+    shuffled across the network, and results are aggregated for each
+    key.
+
+* Cluster Configuration
+
+  - Spark modes
+    - Local Mode:
+      - learn syntax
+      - prototype project
+    - Standalone
+      - Interact with Driver Process via Python or Scala
+    - YARN (good for sharing a cluster with at team)
+    - Mesos (good for sharing a cluster with at team)
+
+* Spark Use Cases
+
+  - Data Analytics
+  - Machine Learning:
+    - page rank
+    - logistic regression
+  - Streaming (not used so much)
+  - Graph Analytics
+  - ETL
+
+* Spark Alternatives
+
+  You don't need Spark for "small data"
+
+  - AWK
+  - R
+  - Python
+  - MySQL / PostgreSQL
+  - TensorFlow / PyTorch
+
+  are all better when working on data that can fit, or nearly fit, on
+  a single machine.
+
+  Some alternatives to storing and processing distributed data that
+  use SQL-like querying are:
+  
+  - HBase
+  - Cassandra
+  - Impala
+  - Presto
+
+  Spark is NOT a data storage system. Whereas the aforementioned ARE.
+
+* Spark Limitations
+
+  - Streaming latency is 500 milliseconds. Other tools such as Storm,
+    Apex, or Flink (which are built for streaming) can out compete
+    spark for low-latency applications.
+
+  - Selection of machine learning algorithms
+    - only algorithms that scale linearly with input data size are
+      supported by Spark.
+
+* Hadoop vs Spark
+
+  - Hadoop is older technology, and despite being slower in some use
+    cases, is simply what some early 'Big Data' adopters use.
+
+  - Spark is not significantly faster than Hadoop for some simple
+    operations, such as counting. In some use cases, migrating legacy
+    code is not cost effective.
+
+* Data Wrangling with Spark
+
+  - functional programming is good for distributed systems
+    - a function in mathematics has a much stricter definition that in
+      general programming. For example, it doesn't even make sense to
+      talk about mathematical functions 'changing' the input
+      data. Also, mathematical functions are constrained by their
+      domain (set of possible inputs) and range (set of possible
+      outputs). Not only does the function output have to reside in
+      the range, functions must also output a single, unique element
+      of that range.
+    - an important feature of functional programming is the lack of
+      side effects. That is, functions cannot have any effects on
+      information outside their scope. this makes calculations independent of
+      one another and insures they do not alter the original data they
+      operate on.
+  - Call functions that adhere to these principles 'pure' functions.
+  - Spark makes copies of it's input data, leaving the original data
+    unchanged.
+  - functions are composed together in chains, and overall directions
+    take the form of directed acyclic graphs (DAGs)
+  - spark uses a concept called lazy evaluation - no computations are
+    actually made until necessary. This avoids memory issues.
+  - multi-step operations in the lazy evaluation sheme are called stages.
+
+  - fundamental tools:
+    - parallelize
+    - maps
+    - lambda
+    - collect
+
+  - data formats
+    - CSV, JSON, HTML, XML
+
+  - Big data usually means distributed data.
+    Distributed big data is designed to tolerate the loss or
+    disruption of individual machines.
+
+  - SparkSession
+    - *SparkContext* is the main entry point to Spark functionality and
+      connects the cluster with the application
+    - *SparkConf* is used to configure the connection, i.e. specifying
+      name and master node's IP address. in local mode, specify
+      'local' as master
+    - *SparkSession* is 'context' used to read data frames
+    - *getOrCreate()* is SparkSession SparkConf equivalent, can also
+      get any SparkSession currently running.
+
+      #+BEGIN_SRC python
+        from pyspark import SparkContext, SparkConf
+        configure = SparkConf().setAppName("name").setMaster("IP Addres") # or local
+        sc = SparkContext(conf = configure)
+      #+END_SRC
+
+      #+BEGIN_SRC python
+        from pyspark.sql import SparkSession
+        spark = SparkSession.builder.appName("name").config("option", "value").getOrCreate()
+      #+END_SRC
+
+    - Spark I/O
+      - a common error is attempting to use input data that not
+        all the worker nodes have access to. An exception like this will
+        arise:
+
+      #+BEGIN_SRC python
+        AnalysisException: u'Path does not exist: file:/home/ubuntu/test.csv;'
+      #+END_SRC
+
+    - Imperitive vs declarative programming:
+      - imperitive tells the computer how to do something
+      - declarative tells the computer what to get/achieve.
+      - there is often a declarative layer that abstracts away the
+        imperative instructions. 
+
+    - Data Manipulation:
+      - General:
+        - select: returns new df with selected cols
+        - filter: filter rows by condition
+        - where: aka filter
+        - groupBy: groups data for aggregation
+        - sort: returns sorted df, ascending by default
+        - dropDuplicates: drops duplicates
+        - withColumn: returns a new df with with added/replaced
+          column.
+
+      - Aggregate:
+        - count
+        - countDistinct
+        - avg
+        - max
+        - min
+        - groupBy().agg({"X": "avg", "Y": "max"})
+
+      - user defined functions UDF
+        - create user defined functions
+          - spark.sql.functions
+          - spark.sql.types
+
+      - Window Functions
+        - combine values from a range of rows in a df.
+        - group with partitionBy
+        - rangeBetween or rowsBetween to get window width
+
+    - Spark SQL
+      - createOrReplaceTempView
+
+    - python and sql based spark interactions are translated into a
+      lower lever DAG execution plan via an optimizer called Catalyst.
+
+    - RDD: Resilient Distributed Data Set
+
+    - Spark and Data Lakes
+
+      - Local Mode -> Cluster Mode
+
+        - Standalone, Mesos, Yarn
+
+        - mesos and yarn are for teams.
+
+      - s3 <-> spark cluster on ec2
+
+        - Options:
+          - EC2 and self setup
+          - EMR (elastic map reduce) which is preconfigured for spark
+
+      - *AWS CLI PROFILE NAME* udacity_de_l5
+        - you can reconfigure options using:
+          aws configure set <varname> <value> [--profile profile-name]
+
+      - (note on Instances):
+        - General purpose
+        - Compute optimized
+        - Memory optimized
+        - storage optimized
+
+    - Spark Scripts and Spark Jobs
+      spark-submit script.py
+
+    - s3 vs hdfs
+      - s3 is easier, but may have to carry data farther over the
+        network
+      - hdfs requires user maintainance, but keeps data closer to
+        computations.
+      - hdfs has limited file format options. s3 is object storage.
+      - hdfs is a true distributed file system and guarantees fault
+        tolerance.
+
+    - *writing files to hdfs*
+
+      - hdfs dfs -mkdir /user/sparkify_data
+      - hdfs dfs -copyFromLocal <file> /user/sparkify_data
+
+    - *reading files from hdfs*
+      
+      - path = "hdfs:///user/sparkify_data/<file>"
+
+    - Debugging Spark
+      - syntax errors
+        - method name errors are shorthand
+        - incorrect column names are long analysis exception errors.
+        - variable typos can result in lengthy errors
+        - when collecting take care
+        - close parens properly... or EOF
+
+      - data errors
+        - spark populates malformed fields with nulls
+        - logs3.where(logs3("_corrupt_record").isNotNull()).collect()
+          for example, finds corrupted records.
+
+      - Accumulators
+        - special variables. 
+        - act like global variables for the entire cluster.
+        - SparkContext.accumulator(0,0) etc
+
+      - Transformations and Actions:
+        - action functions trigger evaluation
+        - transformation functions do not.
