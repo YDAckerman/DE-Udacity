@@ -1343,6 +1343,7 @@
           for example, finds corrupted records.
 
       - Accumulators
+(https://spark.apache.org/docs/2.2.0/rdd-programming-guide.html#accumulators)
         - special variables. 
         - act like global variables for the entire cluster.
         - SparkContext.accumulator(0,0) etc
@@ -1350,3 +1351,101 @@
       - Transformations and Actions:
         - action functions trigger evaluation
         - transformation functions do not.
+
+      - Spark WebUI
+        - helps you understand what's going on in your cluster
+        - provides:
+          - cluster configuration
+          - DAG
+            - Stages
+              - tasks
+          - profiling jobs
+        - connecting:
+          - port 8888 for jupyter
+          - 4040 shows active spark jobs
+          - 8080 to access webUI
+
+      - Logging
+        (see https://spark.apache.org/docs/latest/configuration.html)
+        - sparkContext.setLogLevel("ERROR")
+        - sparkContext.setLogLevel("INFO")
+
+      - Code Optimization (for big datasets)
+        - data skew:
+          data is not distributed evenly across the cluster.
+          - Pareto Principle:
+            80% of data from 20% of users.
+
+        - divy up data by a different field.
+            
+        - data summaries will help!
+
+        - df.repartition(<number of workers>)
+
+
+* Data Lakes
+  - needed to accommodate changes in incoming data
+  - not a replacement for relational databases
+  - some data are hard to put into tabular format
+  - accommodate the need to explore and analyze unstructured data,
+    especially in the context of data science and machine learning.
+    
+  - Shema on Read:
+    - StructType(()) to specify schema
+    - spark.read.csv(inferSchema {T/F})
+      - give explicit schema
+      - tell it what to do with malformed data
+    - spark can read a lot of data types:
+      - csv
+      - avro (binary)
+      - parquet (columnar)
+      - gzip and snappy (compressed)
+    - can read/write from cloud
+    - can read/write from database
+      - sql through jdbc
+      - nosql: mongodb, cassandra, neo4j, etc.
+
+  - Ideas:
+    - data of all types, formats, structures, values
+    - not ETL, but ELT:
+      - data is transformed later (schema on read)
+    - distributed data storage out of the box.
+
+  - How to Build a Data Lake on AWS
+    - storage:
+      - HDFS
+      - S3
+    - processing:
+      - Spark, Hive, Flink
+    - AWS managed:
+      - EMR
+        - HDFS + Spark
+        - Spark only
+      - Athena (serverless)
+    - Vendor Managed:
+      - EC2 + Vendor solution
+
+  - AWS EMR (HDFS + Spark)
+    - queried in place
+    - only results come to the analyst
+    - cluster must be available to access data
+    - pay the cost of the ec2 machines on which the emr is running
+      (these are on 24/7)
+
+  - AWS EMR (s3 + Spark)
+    - s3 is the lake storage
+    - emr cluster only has spark
+    - load data over the network and computer on emr
+    - cluster does not need to be on 24/7, only while computations are
+      running.
+    - may be cheaper, but performance is lower than HDFS
+      solution. However network speed on the cloud has improved
+      dramatically
+
+  - Athena
+    - serverless. I haven't heard of anyone using this.
+      
+  - Issues:
+    - can be chaotic.
+    - data governance can be tricky
+    - how it fits in with / replaces a data warehouse.
